@@ -58,6 +58,39 @@ char* getServerTime() {
 }
 
 
+/**
+ * Récuprère les données
+ */
+void parseData() {
+  // Récupération du message
+  //  Format:  "idCapteur;tauxCO2"
+  String str = Serial.readString();
+  str.toCharArray(receivedData, str.length()+1);
+  
+  // Premier champs : idCapteur (int)
+  char* data = strtok(receivedData,";");
+  idCapteur = atoi(data);
+  
+  // Deuxième champs : tauxCO2 (float)
+  data = strtok(receivedData,";");
+  tauxCO2 = atof(data);
+}
+
+/**
+ * Récuprère les données
+ */
+void parseData_v2() {
+  //  Format:  "idCapteur;tauxCO2"
+  
+  // Premier champs : idCapteur (int)
+  idCapteur = Serial.parseInt();
+  
+  // Deuxième champs : tauxCO2 (float)
+  tauxCO2 = Serial.parseFloat();
+}
+
+
+
 // ----------------------------------------
 //            setup & loop :
 // ----------------------------------------
@@ -70,19 +103,7 @@ void setup() {
 void loop() {
   // Si un message est reçu :
   if(Serial.available() > 0) {
-    
-    // Récupération du message
-    //  Format:  "idCapteur;tauxCO2"
-    receivedData = Serial.readString().toCharArray();
-
-    // Premier champs : idCapteur (int)
-    char* data = strtok(receivedData,";");
-    idCapteur = parseInt(data);
-
-    // Deuxième champs : tauxCO2 (float)
-    data = strtok(receivedData,";");
-    tauxCO2 = parseFloat(data);
-
+    parseData_v2();
     envoiServeur();
   }
 
