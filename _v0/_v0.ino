@@ -14,6 +14,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Ethernet.h>
+#include <avr/sleep.h>
 
 #define INPUT_SIZE 31
 #define ID_BATIMENT 22001
@@ -95,16 +96,33 @@ void parseData_v2() {
 //            setup & loop :
 // ----------------------------------------
 
+int i=0;
+float co2;
+
 void setup() {
   Serial.begin(9600);
   // TODO
+  randomSeed(analogRead(0));
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 }
 
 void loop() {
+  co2 = random(1,500) / 100.0; 
+  String str = "capt";
+  str = str + i + ";" + co2 + ";";
+  i++;
+  
+  Serial.print(str);
+
+  
   // Si un message est reçu :
   if(Serial.available() > 0) {
     parseData_v2();
     envoiServeur();
+    Serial.print("\n");
   }
-
+  
+  delay(1000);
+  if (i < 10) return;
+  sleep_mode();
 }
