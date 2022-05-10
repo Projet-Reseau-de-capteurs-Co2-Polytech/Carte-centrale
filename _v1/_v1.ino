@@ -74,7 +74,9 @@ void envoiServeur() {
   } else {
     // calculer le temps écoulé depuis le dernier temps reçu
     unsigned long timer = millis();
-    itoa(timer, heure.back().value, 10);
+    datetime dt;
+    itoa(timer, dt.value, 10); // <- à changer
+    heure.push_back(dt);
   }
 
   /**
@@ -84,6 +86,9 @@ void envoiServeur() {
     String str = "";
     str = str + ID_BATIMENT + ";" + idCapteur.front() + ";" + tauxCO2.front() + ";" + heure.front().value + ";";
     // TODO : Envoyer str au serveur
+    idCapteur.remove(0);
+    tauxCO2.remove(0);
+    heure.remove(0);
     nbPaquetsNonEnvoyes--;
   }
 }
