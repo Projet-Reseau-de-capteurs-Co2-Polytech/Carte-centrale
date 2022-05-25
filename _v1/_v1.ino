@@ -35,11 +35,13 @@
  *  => Stockage max de environ 70 tuples de données
  *  => nb tuples choisi = 60 pour éviter une collision heap/stack
  */
- 
+
 #define ID_BATIMENT 22001
 #define INPUT_SIZE 31
 #define DATE_TIME_SIZE 20
 #define NB_MAX_TUPLES 60
+
+
 
 struct datetime {
   // date-time format : "yyyy-mm-dd hh:mm:ss"
