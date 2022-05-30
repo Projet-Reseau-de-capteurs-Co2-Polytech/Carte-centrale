@@ -40,7 +40,7 @@
 #define ID_BATIMENT 22001
 #define INPUT_SIZE 31
 #define DATE_TIME_SIZE 20
-#define NB_MAX_TUPLES 20 
+#define NB_MAX_TUPLES 80
 
 SoftwareSerial zigbeeSerial(7, 6);
 unsigned long previousMillis = 0;
@@ -118,33 +118,52 @@ void HTTP_Request_GET(){
 
 
 /**
- * Parse une chaîne de caractères en datetime
+ * Parse une chaîne de caractères de format "yyyy-mm-dd hh:mm:ss"
+ */
+char** stringToTokens(char* src) {
+    char** res = malloc( sizeof(char*) * 6);
+    int nbtokens = 0, ite = 0;
+
+    res[0] = malloc( sizeof(char) *5);
+    for (int p=0; p<4; p++) {
+        res[0][p] = src[p];
+    }
+    res[0][4] = '\0';
+
+    for (int i=1; i<6; i++) {
+        res[i] = malloc( sizeof(char) *3);
+        for (int p=0; p<2; p++) {
+            res[i][p] = src[i*3 + 2 + p];
+        }
+        res[i][2] = '\0';
+    }
+    return res;
+}
+
+
+/**
+ * Convertit une variable datetime en ms
  */
 datetime parseDateTimeString(char* timeStr) {
   datetime dt;
-  char separators[4] = "- :";
-  
-  char* str = strtok(timeStr, separators);
-  dt.year = atoi(str);
-  str = strtok(str, separators);
-  dt.month = atoi(str);
-  str = strtok(str, separators);
-  dt.day = atoi(str);
-  str = strtok(str, separators);
-  dt.hours = atoi(str);
-  str = strtok(str, separators);
-  dt.minutes = atoi(str);
-  str = strtok(str, separators);
-  dt.seconds = atoi(str);
+
+  char** tokens = stringToTokens(timeStr);
+    
+  dt.year = atoi(tokens[0]);
+  dt.month = atoi(tokens[1]);
+  dt.day = atoi(tokens[2]);
+  dt.hours = atoi(tokens[3]);
+  dt.minutes = atoi(tokens[4]);
+  dt.seconds = atoi(tokens[5]);
 
   return dt;
 }
 
 /**
- * Convertit une variable datetime en ms
+ * convertit un datetime en un temps en ms
  */
-unsigned long long datetimeToMs(datetime t) {
-  long long timeRef = 1000;
+unsigned long long datetimeToMs(struct datetime t) {
+  unsigned long long timeRef = 1000;
   unsigned long long l = t.seconds * timeRef;
   timeRef *= 60;  l += t.minutes * timeRef;
   timeRef *= 60;  l += t.hours * timeRef;
@@ -155,13 +174,30 @@ unsigned long long datetimeToMs(datetime t) {
 }
 
 /**
+ * convertit un temps en ms au format "yyyy-mm-dd hh:mm:ss"
+ */
+char* msToDatetime(long long timeMs) {
+  unsigned long long timeref = 1000*60*60*24;
+  short ye = timeMs/timeref/365.2425; timeMs = timeMs - ye * 365.2425*timeref;
+  short mo = timeMs/timeref/30.436875; timeMs = timeMs - mo * 30.436875*timeref;
+  short da = timeMs/timeref; timeMs = timeMs - da * timeref;   timeref /= 24;
+  short ho = timeMs/timeref; timeMs = timeMs - ho * timeref; timeref /= 60;
+  short mi = timeMs/timeref; timeMs = timeMs - mi * timeref; timeref /= 60;
+  short se = timeMs/timeref;
+  
+  char* dt = malloc(sizeof(char) * 20);
+  sprintf(dt, "%04hi-%02hi-%02hi %02hi:%02hi:%02hi", ye, mo, da, ho, mi, se);
+  return dt;
+}
+
+/**
  * Enlève la mesure la plus ancienne
  */
 void removeLastMeasure() {
-    idCapteur.remove(0);
-    tauxCO2.remove(0);
-    date.remove(0);
-    nbPaquetsNonEnvoyes--;
+  idCapteur.remove(0);
+  tauxCO2.remove(0);
+  date.remove(0);
+  nbPaquetsNonEnvoyes--;
 }
 
 /** 
@@ -171,15 +207,15 @@ char* getServerTime() {
   char* t = "";
   HTTP_Request_GET(); 
   t=getRequestInformation(); 
-    return t;
+  return t;
 }
 
 /**
 * Récupère les informations d'une requête http 1.1
 */
 char* getRequestInformation(){
-      char* information=""; 
-     while(client.connected()) {
+  char* information=""; 
+  while(client.connected()) {
     if(client.available()){
       // read an incoming byte from the server and print it to serial monitor:
       char c = client.read();
