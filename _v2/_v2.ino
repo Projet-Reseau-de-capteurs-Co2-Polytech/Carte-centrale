@@ -41,17 +41,21 @@
 #define NB_MAX_TUPLES 20
 #define INPUT_SIZE 31
 #define DATE_TIME_SIZE 20
-#define TAILLE_BUFFER 156
+#define TAILLE_BUFFER 26
+#define CAPTEUR_ID_SIZE 13
 
 
 SoftwareSerial zigbeeSerial(7, 6);
 unsigned long previousMillis = 0;
 
+struct nomcapteur {
+  char* value;
+};
 
 // Variables locales
 char receivedData[INPUT_SIZE+1];  // INPUT_SIZE+1 bytes
-Array<int,       NB_MAX_TUPLES> idCapteur;
-Array<short,     NB_MAX_TUPLES> tauxCO2;
+Array<char*,              NB_MAX_TUPLES> idCapteur;
+Array<short,              NB_MAX_TUPLES> tauxCO2;
 Array<unsigned long long, NB_MAX_TUPLES> date;
 int nbPaquetsNonEnvoyes;
 int lastDataSentTime = 0;
@@ -94,11 +98,10 @@ void HTTP_Request_POST(String queryString){
     Serial.println("Connected to server");
     // make a HTTP request:
     // send HTTP header
-    client.println(POST + " " + PATH_NAME_POST + " HTTP/1.1");
+    client.println(POST + " " + PATH_NAME_POST+queryString + " HTTP/1.1");
     client.println("Host: " + String(HOST_NAME));
     client.println("Connection: close");
     client.println(); // end HTTP header
-    client.println(queryString);
   }
 }
 
@@ -126,14 +129,14 @@ char** stringToTokens(char* src) {
     char** res = malloc( sizeof(char*) * 6);
     int nbtokens = 0, ite = 0;
 
-    res[0] = malloc( sizeof(char) *5);
+    res[0] = malloc( sizeof(char) * 5);
     for (int p=0; p<4; p++) {
         res[0][p] = src[p];
     }
     res[0][4] = '\0';
 
     for (int i=1; i<6; i++) {
-        res[i] = malloc( sizeof(char) *3);
+        res[i] = malloc( sizeof(char) * 3);
         for (int p=0; p<2; p++) {
             res[i][p] = src[i*3 + 2 + p];
         }
@@ -180,13 +183,12 @@ unsigned long long datetimeToMs(struct datetime t) {
  */
 char* msToDatetime(long long timeMs) {
   unsigned long long timeref = 1000*60*60*24;
-  short ye = timeMs/timeref/365.2425; timeMs = timeMs - ye * 365.2425*timeref;
+  short ye = timeMs/timeref/365.2425;  timeMs = timeMs - ye * 365.2425*timeref;
   short mo = timeMs/timeref/30.436875; timeMs = timeMs - mo * 30.436875*timeref;
-  short da = timeMs/timeref; timeMs = timeMs - da * timeref;   timeref /= 24;
+  short da = timeMs/timeref; timeMs = timeMs - da * timeref; timeref /= 24;
   short ho = timeMs/timeref; timeMs = timeMs - ho * timeref; timeref /= 60;
-  short mi = timeMs/timeref; timeMs = timeMs - mi * timeref; timeref /= 60;
-  short se = timeMs/timeref;
-  
+  short mi = timeMs/timeref; timeMs = timeMs - mi * timeref;
+  short se = timeMs;
   char* dt = malloc(sizeof(char) * 20);
   sprintf(dt, "%04hi-%02hi-%02hi %02hi:%02hi:%02hi", ye, mo, da, ho, mi, se);
   return dt;
@@ -214,18 +216,28 @@ char* getServerTime() {
 * Récupère les informations d'une requête http 1.1
 */
 char* getRequestInformation(){
+  Serial.println("getRequestInformation");
+  delay(100);
   int length = 0;
+  int compteur=0; 
   char* information = malloc(TAILLE_BUFFER * sizeof(char)); 
   while(client.connected()) {
     if(client.available()){
-      // read an incoming byte from the server:
-      char c = client.read();
-      information[length] = c;
-      length++;
-      //information=information+c; 
+       // read an incoming byte from the server:
+       char c = client.read();
+       if(c!='{' && c!='}'){
+        if(compteur==1){
+         information[length] = c;
+         length++;
+        }
+       }
+       else{
+        compteur++; 
+       } 
     }
   }
   information[length] = '\0';
+
   return information; 
 }
 
@@ -240,7 +252,7 @@ char* getRequestInformation(){
 void envoiServeur() {
   // Si l'date a bien été reçue
   char* h = getServerTime();
-  h = "2022-06-02 09:08:32";
+  h = "2022-06-02 08:08:00";
   if (strcmp(h, "") != 0) {
     Serial.write("Réponse serveur\n");
     datetime dt = parseDateTimeString(h);
@@ -251,12 +263,12 @@ void envoiServeur() {
     unsigned long lastMillisB = 4294947295;
     if (currentMillis < previousMillis) currentMillis += lastMillisB - previousMillis;
     previousMillis = currentMillis % lastMillisB;
-    date.push_back(date.back() + currentMillis);
+    //date.push_back(date.back() + currentMillis);
   }
   Serial.write("Préparation envoi données\n");
   char* heure =  msToDatetime(date.front());
   String str = "?";
-  str = str +"idBatiment="+ ID_BATIMENT + "&" +"idCapteurs"+ idCapteur.front() + "&"+"tauxCO2" + tauxCO2.front() + "&"+"heure" + heure;
+  str = str +"idBatiment="+ ID_BATIMENT + "&" +"idCapteurs="+ idCapteur.front() + "&"+"tauxCO2=" + tauxCO2.front() + "&"+"heure=" + heure;
   short str_len = str.length()+1;
   char buff[str_len];
   str.toCharArray(buff, str_len);
@@ -266,18 +278,32 @@ void envoiServeur() {
 }
 
 
+char* parseInput() {
+  char* data = malloc(CAPTEUR_ID_SIZE * sizeof(char));
+  short ite = 0;
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == ';' || c == -1 || ite>CAPTEUR_ID_SIZE) break;
+    data[ite] = c;
+    ite++;
+    
+  }
+  data[ite] = '\0';
+  return data;
+}
+
+
 /**
  * Récuprère les données
  * Format:  "idCapteur;tauxCO2"
  */
 void parseData() {
   // Premier champs : idCapteur (int)
-  //idCapteur.push_back(zigbeeSerial.parseInt());
-  idCapteur.push_back(Serial.parseInt());
-  
+  idCapteur.push_back(parseInput());
   // Deuxième champs : tauxCO2 (short)
   //tauxCO2.push_back(zigbeeSerial.parseInt());
   tauxCO2.push_back(Serial.parseInt());
+  Serial.flush();
 }
 
 
@@ -295,7 +321,7 @@ void setup() {
   
   nbPaquetsNonEnvoyes = 0;
   
-  if (Ethernet.begin(mac) == 0) {
+  if (Ethernet.begin(mac, "192.168.246.22") == 0) {
     Serial.println("Failed to obtaining an IP address using DHCP");
     //while(true);
   }
@@ -305,7 +331,8 @@ void setup() {
 
 void loop() {
   // Si un message est reçu :
-  if(zigbeeSerial.available() > 0 || Serial.available() > 0) {
+  if(zigbeeSerial.available() > 0 || Serial.available() > 1) {
+    delay(100);
     Serial.write("Données reçues...\n");
     parseData();    // Parse puis ajoute les données dans les Arrays correspondants
     nbPaquetsNonEnvoyes++;
