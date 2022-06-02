@@ -213,14 +213,18 @@ char* getServerTime() {
 */
 char* getRequestInformation(){
   int length = 0;
+  int compteur=0; 
   char* information = malloc(TAILLE_BUFFER * sizeof(char)); 
-  while(client.connected()) {
+  while(client.connected() && compteur<2) {
     if(client.available()){
       // read an incoming byte from the server:
       char c = client.read();
       if(c!='{' && c!='}'){
         information[length] = c;
         length++;
+      }
+      else{
+        compteur++; 
       }
       //information=information+c; 
     }
