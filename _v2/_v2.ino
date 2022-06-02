@@ -38,9 +38,11 @@
  *  => nb tuples choisi = 60 pour éviter une collision heap/stack
  */
 #define ID_BATIMENT 22001
+#define NB_MAX_TUPLES 20
 #define INPUT_SIZE 31
 #define DATE_TIME_SIZE 20
-#define NB_MAX_TUPLES 80
+#define TAILLE_BUFFER 156
+
 
 SoftwareSerial zigbeeSerial(7, 6);
 unsigned long previousMillis = 0;
@@ -86,8 +88,8 @@ struct datetime { // 12 bytes
 /**
  * Réalise la requete http POST via l'API. 
  */
-  void HTTP_Request_POST(String queryString){
-     if(client.connect(HOST_NAME, HTTP_PORT)) {
+void HTTP_Request_POST(String queryString){
+  if(client.connect(HOST_NAME, HTTP_PORT)) {
     // if connected:
     Serial.println("Connected to server");
     // make a HTTP request:
@@ -97,8 +99,8 @@ struct datetime { // 12 bytes
     client.println("Connection: close");
     client.println(); // end HTTP header
     client.println(queryString);
-    }
   }
+}
 
 /**
  * Réalise la requête http GET via l'API
@@ -204,26 +206,29 @@ void removeLastMeasure() {
  *  Récupère le temps "yyyy-mm-dd hh:mm:ss" à partir du serveur
  */
 char* getServerTime() {
-  char* t = "";
   HTTP_Request_GET(); 
-  t=getRequestInformation(); 
-  return t;
+  return getRequestInformation();
 }
 
 /**
 * Récupère les informations d'une requête http 1.1
 */
 char* getRequestInformation(){
-  char* information=""; 
+  int length = 0;
+  char* information = malloc(TAILLE_BUFFER * sizeof(char)); 
   while(client.connected()) {
     if(client.available()){
-      // read an incoming byte from the server and print it to serial monitor:
+      // read an incoming byte from the server:
       char c = client.read();
-      information=information+c; 
+      information[length] = c;
+      length++;
+      //information=information+c; 
     }
   }
+  information[length] = '\0';
   return information; 
 }
+
 
 
 /** Envoie les données au serveur
@@ -235,20 +240,27 @@ char* getRequestInformation(){
 void envoiServeur() {
   // Si l'date a bien été reçue
   char* h = getServerTime();
+  h = "2022-06-02 09:08:32";
   if (strcmp(h, "") != 0) {
+    Serial.write("Réponse serveur\n");
     datetime dt = parseDateTimeString(h);
     date.push_back(datetimeToMs(dt));
   } else {
+    Serial.write("Aucune réponse serveur\n");
     unsigned long currentMillis = millis();
     unsigned long lastMillisB = 4294947295;
     if (currentMillis < previousMillis) currentMillis += lastMillisB - previousMillis;
     previousMillis = currentMillis % lastMillisB;
     date.push_back(date.back() + currentMillis);
   }
+  Serial.write("Préparation envoi données\n");
+  char* heure =  msToDatetime(date.front());
   String str = "?";
-  char heure[16];
-  sprintf(heure, "%lld", date.front());
   str = str +"idBatiment="+ ID_BATIMENT + "&" +"idCapteurs"+ idCapteur.front() + "&"+"tauxCO2" + tauxCO2.front() + "&"+"heure" + heure;
+  short str_len = str.length()+1;
+  char buff[str_len];
+  str.toCharArray(buff, str_len);
+  Serial.print(buff);
   HTTP_Request_POST(str);
   removeLastMeasure();
 }
@@ -260,10 +272,12 @@ void envoiServeur() {
  */
 void parseData() {
   // Premier champs : idCapteur (int)
-  idCapteur.push_back(zigbeeSerial.parseInt());
+  //idCapteur.push_back(zigbeeSerial.parseInt());
+  idCapteur.push_back(Serial.parseInt());
   
   // Deuxième champs : tauxCO2 (short)
-  tauxCO2.push_back(zigbeeSerial.parseInt());
+  //tauxCO2.push_back(zigbeeSerial.parseInt());
+  tauxCO2.push_back(Serial.parseInt());
 }
 
 
@@ -275,22 +289,24 @@ void parseData() {
 void setup() {
   
   Serial.begin(9600);
+  Serial.write("Initialisation...\n");
   zigbeeSerial.begin(115200);
   //set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   
   nbPaquetsNonEnvoyes = 0;
   
-   if (Ethernet.begin(mac) == 0) {
+  if (Ethernet.begin(mac) == 0) {
     Serial.println("Failed to obtaining an IP address using DHCP");
     //while(true);
   }
-  
+  Serial.write("Fin d'initialisation, début programme...\n");
 }
 
 
 void loop() {
   // Si un message est reçu :
-  if(zigbeeSerial.available() > 0) {
+  if(zigbeeSerial.available() > 0 || Serial.available() > 0) {
+    Serial.write("Données reçues...\n");
     parseData();    // Parse puis ajoute les données dans les Arrays correspondants
     nbPaquetsNonEnvoyes++;
     envoiServeur(); // Envoie les données au serveur
