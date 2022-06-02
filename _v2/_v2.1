@@ -93,8 +93,8 @@ void HTTP_Request_POST(String queryString){
     Serial.println("Connected to server");
     // make a HTTP request:
     // send HTTP header
-    client.println(POST + " " + PATH_NAME_POST + " HTTP/1.1");
-    client.println("Host: " + String(HOST_NAME)+String(queryString));
+    client.println(POST + " " + PATH_NAME_POST+queryString + " HTTP/1.1");
+    client.println("Host: " + String(HOST_NAME));
     client.println("Connection: close");
     client.println(); // end HTTP header
   }
